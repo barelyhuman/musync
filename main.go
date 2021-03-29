@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -12,14 +13,18 @@ import (
 	"strings"
 
 	"github.com/zmb3/spotify"
+	"gopkg.in/yaml.v2"
 )
+
+type Config struct {
+	ClientID       string `yaml:"client_id"`
+	ClientSecret   string `yaml:"client_secret"`
+	PlaylistTarget string `yaml:"playlist"`
+	Port           string `yaml:"port"`
+}
 
 var (
 	ServerListener chan bool
-	clientID       *string
-	clientSecret   *string
-	playlistTarget *string
-	port           *string
 	redirectURL    string
 	auth           spotify.Authenticator
 )
@@ -29,17 +34,23 @@ var (
 	terminalGreen = "\033[32m"
 	terminalRed   = "\033[31m"
 	terminalReset = "\033[0m"
+	globalConfig  *Config
 )
 
 func main() {
-	clientID = flag.String("clientId", "", "spotify client id")
-	clientSecret = flag.String("clientSecret", "", "spotify client secret")
-	playlistTarget = flag.String("targetPlaylist", "", "playlist to sync the library to")
-	port = flag.String("port", "3000", "port to run the initial oauth server on")
+	configPath := flag.String("c", "./musync.yaml", "point to config")
 
 	flag.Parse()
 
-	redirectURL = "http://localhost" + ":" + *port + "/callback"
+	globalConfig = parseConfig(*configPath)
+
+	fmt.Println("config received:", globalConfig)
+
+	if globalConfig.Port == "" {
+		globalConfig.Port = "3000"
+	}
+
+	redirectURL = "http://localhost" + ":" + globalConfig.Port + "/callback"
 	auth = spotify.NewAuthenticator(redirectURL, spotify.ScopeUserReadPrivate, spotify.ScopeUserLibraryRead, spotify.ScopePlaylistModifyPublic)
 
 	if runtime.GOOS == "windows" {
@@ -55,10 +66,10 @@ func initiateMusicSync() {
 	var clientInstance spotify.Client
 	ServerListener = make(chan bool)
 
-	auth.SetAuthInfo(*clientID, *clientSecret)
+	auth.SetAuthInfo(globalConfig.ClientID, globalConfig.ClientSecret)
 	url := auth.AuthURL(state)
 
-	server := &http.Server{Addr: ":" + *port}
+	server := &http.Server{Addr: ":" + globalConfig.Port}
 
 	fmt.Println("Created server instance")
 
@@ -102,16 +113,18 @@ func getClientFromRequest(w http.ResponseWriter, r *http.Request) spotify.Client
 }
 
 func handleTrackShift(client spotify.Client) {
-	playlistId := *playlistTarget
+	playlistId := globalConfig.PlaylistTarget
 	user, err := client.CurrentUser()
 
 	if err != nil {
 		log.Fatal("Failed to get user...\n Error:", err)
 	}
 
-	fmt.Println("Logged in as: ", user.DisplayName)
+	fmt.Println("Logged in as: ",
+		colorString(terminalGreen, user.DisplayName),
+	)
 
-	fmt.Println("Getting library tracks...")
+	fmt.Println("====\nProcessing Library\n====")
 
 	tracks, err := client.CurrentUsersTracks()
 	totalCount := tracks.Total
@@ -123,7 +136,9 @@ func handleTrackShift(client spotify.Client) {
 		log.Fatal("Failed while trying to get playlist, Error:", err)
 	}
 
-	fmt.Println("Starting sync to move to playlist: ", playlist.Name)
+	fmt.Println("Comparing Library and Playlist: ",
+		colorString(terminalGreen, playlist.Name),
+	)
 
 	trackIdsInLibrary := getAllTrackIds(tracks, client)
 	trackIdsInPlaylist := getAllPlaylistIds(playlist, client)
@@ -143,6 +158,10 @@ func handleTrackShift(client spotify.Client) {
 	if !askForConfirmation("Do you want to continue ?") {
 		fmt.Println(colorString(terminalRed, "Cancelled"))
 		return
+	}
+
+	if len(uniqueTrackIds) < 1 {
+		fmt.Println(colorString(terminalRed, "Nothing to move!"))
 	}
 
 	batches := createPlaylistIDBatches(uniqueTrackIds, 100)
@@ -243,4 +262,18 @@ func askForConfirmation(s string) bool {
 			return false
 		}
 	}
+}
+
+func parseConfig(path string) *Config {
+	fileData, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Fatal(`Error reading config, make sure you have config file 
+		named musync.yaml or point 
+		to another config using the -c flag`)
+	}
+
+	config := &Config{}
+	yaml.Unmarshal([]byte(fileData), config)
+
+	return config
 }
