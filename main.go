@@ -11,8 +11,10 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/zmb3/spotify"
+	"golang.org/x/oauth2"
 	"gopkg.in/yaml.v2"
 )
 
@@ -66,36 +68,52 @@ func initiateMusicSync() {
 	var clientInstance spotify.Client
 	ServerListener = make(chan bool)
 
-	auth.SetAuthInfo(globalConfig.ClientID, globalConfig.ClientSecret)
-	url := auth.AuthURL(state)
+	token, err := readToken()
 
-	server := &http.Server{Addr: ":" + globalConfig.Port}
-
-	fmt.Println("Created server instance")
-
-	http.HandleFunc("/callback", func(rw http.ResponseWriter, r *http.Request) {
-		clientInstance = getClientFromRequest(rw, r)
-		ServerListener <- true
-	})
-
-	fmt.Println("Please open the below URL in a browser:\n" + url)
-
-	go func(listener chan bool) {
-		select {
-		case <-listener:
-			{
-				err := server.Shutdown(context.Background())
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		}
-	}(ServerListener)
-
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err != nil {
 		log.Fatal(err)
 	}
 
+	authPassed := true
+
+	clientInstance = auth.NewClient(token)
+	_, err = clientInstance.CurrentUser()
+
+	if err != nil {
+		authPassed = false
+	}
+
+	auth.SetAuthInfo(globalConfig.ClientID, globalConfig.ClientSecret)
+	url := auth.AuthURL(state)
+
+	if !authPassed {
+		server := &http.Server{Addr: ":" + globalConfig.Port}
+
+		fmt.Println("Created server instance")
+
+		http.HandleFunc("/callback", func(rw http.ResponseWriter, r *http.Request) {
+			clientInstance = getClientFromRequest(rw, r)
+			ServerListener <- true
+		})
+
+		fmt.Println("Please open the below URL in a browser:\n" + url)
+
+		go func(listener chan bool) {
+			select {
+			case <-listener:
+				{
+					err := server.Shutdown(context.Background())
+					if err != nil {
+						log.Fatal(err)
+					}
+				}
+			}
+		}(ServerListener)
+
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}
 	// Start the track shift process
 	handleTrackShift(clientInstance)
 }
@@ -103,6 +121,8 @@ func initiateMusicSync() {
 func getClientFromRequest(w http.ResponseWriter, r *http.Request) spotify.Client {
 	// use the same state string here that you used to generate the URL
 	token, err := auth.Token(state, r)
+
+	saveToken(token)
 	if err != nil {
 		http.Error(w, "Couldn't get token", http.StatusNotFound)
 		return spotify.Client{}
@@ -110,6 +130,41 @@ func getClientFromRequest(w http.ResponseWriter, r *http.Request) spotify.Client
 
 	// create a client using the specified token
 	return auth.NewClient(token)
+}
+
+type Token struct {
+	AccessToken  string    `yaml:"access_token"`
+	TokenType    string    `yaml:"type"`
+	RefreshToken string    `yaml:"refresh_token"`
+	Expiry       time.Time `yaml:"expiry"`
+}
+
+func readToken() (*oauth2.Token, error) {
+	token := &oauth2.Token{}
+	data, err := ioutil.ReadFile("token.yml")
+
+	if err != nil {
+		return token, nil
+	}
+
+	configToken := &Token{}
+	yaml.Unmarshal(data, configToken)
+
+	token.AccessToken = configToken.AccessToken
+	token.RefreshToken = configToken.RefreshToken
+	token.TokenType = configToken.TokenType
+	token.Expiry = configToken.Expiry
+	return token, nil
+}
+
+func saveToken(token *oauth2.Token) {
+	var sb strings.Builder
+	sb.WriteString("refresh_token: " + token.RefreshToken + "\n")
+	sb.WriteString("type: " + token.TokenType + "\n")
+	sb.WriteString("access_token: " + token.AccessToken + "\n")
+	sb.WriteString("expiry: " + token.Expiry.String() + "\n")
+
+	ioutil.WriteFile("token.yml", []byte(sb.String()), os.ModePerm)
 }
 
 func handleTrackShift(client spotify.Client) {
