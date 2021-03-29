@@ -1,0 +1,47 @@
+name: Binary Builds Pre-Releases
+
+on:
+  push:
+    tags:
+      - 'v*-dev.*'
+
+jobs:
+  pre-release:
+    name: Pre Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+      - name: Checkout the repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Generate Change Log
+        id: generate_log
+        run: |
+          curl -s https://api.github.com/repos/barelyhuman/commitlog/releases/latest \
+          | grep browser_download_url \
+          | grep linux-amd64 \
+          | cut -d '"' -f 4 \
+          | wget -qi -
+          tar -xvzf commitlog-linux-amd64.tar.gz
+          chmod +x commitlog 
+          ./commitlog -i "feat,fix,refactor" > CHANGELOG.txt
+      - name: Generate build files
+        uses: thatisuday/go-cross-build@v1
+        with:
+          platforms: "linux/amd64, linux/arm, linux/arm64, windows/amd64, darwin/amd64"
+          package: ""
+          name: musync
+          compress: "true"
+          dest: dist
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          prerelease: true
+          body_path: CHANGELOG.txt
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
