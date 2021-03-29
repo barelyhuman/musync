@@ -32,15 +32,17 @@ var (
 )
 
 var (
-	state         = GenerateCrypticState()
-	terminalGreen = "\033[32m"
-	terminalRed   = "\033[31m"
-	terminalReset = "\033[0m"
-	globalConfig  *Config
+	state           = GenerateCrypticState()
+	terminalGreen   = "\033[32m"
+	terminalRed     = "\033[31m"
+	terminalReset   = "\033[0m"
+	globalConfig    *Config
+	skipConfimation *bool
 )
 
 func main() {
 	configPath := flag.String("c", "./musync.yaml", "point to config")
+	skipConfimation = flag.Bool("skip", false, "skip confirmation question")
 
 	flag.Parse()
 
@@ -210,7 +212,7 @@ func handleTrackShift(client spotify.Client) {
 		"Total Tracks to be Moved: " + colorString(terminalGreen, fmt.Sprint(len(uniqueTrackIds))),
 	)
 
-	if !askForConfirmation("Do you want to continue ?") {
+	if !*skipConfimation && !askForConfirmation("Do you want to continue ?") {
 		fmt.Println(colorString(terminalRed, "Cancelled"))
 		return
 	}
