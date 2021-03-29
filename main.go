@@ -95,6 +95,7 @@ func initiateMusicSync() {
 
 		http.HandleFunc("/callback", func(rw http.ResponseWriter, r *http.Request) {
 			clientInstance = getClientFromRequest(rw, r)
+			rw.Write([]byte("Logged In!"))
 			ServerListener <- true
 		})
 
