@@ -1,5 +1,14 @@
-# musync 
+<p align="center">
+    <img src="/assets/logo.png"/>
+</p>
+
+<h1 align="center">
+musync
+</h1>
+ 
+<p align="center">
 Simple utility to sync your spotify library with a playlist. 
+</p>
 
 ## Motivation 
 I use spotify only to get recommendations and normally use [music](music.reaper.im) and it's generally easier to work with public playlists when importing the tracks on it. Decided I just sync everything from the user library to a public playlist. 
