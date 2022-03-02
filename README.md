@@ -19,6 +19,18 @@ Simple utility to sync your spotify library with a playlist.
 
 There's enough reasons to sync your spotify library to a playlist, this could go from sharing the playlist to keeping the library small and clean while still having a playlist as an archive.
 
+## Install
+
+You can download from the [releases](/releases) page or using the command below
+
+```sh
+# golang not installed?
+curl -sf https://goblin.reaper.im/github.com/barelyhuman/musync | sh
+
+# golang installed and > 1.15
+go install github.com/barelyhuman/musync
+```
+
 ## Usage
 
 This is a very developer centric tool and would need a few steps to get it to up and ready.
