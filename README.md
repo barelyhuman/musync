@@ -10,11 +10,48 @@ musync
 Simple utility to sync your spotify library with a playlist. 
 </p>
 
-## Motivation 
-I use spotify only to get recommendations and normally use [music](music.reaper.im) and it's generally easier to work with public playlists when importing the tracks on it. Decided I just sync everything from the user library to a public playlist. 
+## Features
 
-## Usage 
-You execute the binary while pointing it to a config that follows the [config.template.yaml](/config.template.yaml), the default config file is to be in the folder you are running the binary with the name `musync.yaml`
+- Sync Queues
+- Batched Processing (less heavy on the RAM)
 
-## Auto Sync 
-You cannot do it right now since the token's aren't stored anywhere so you may have to open the browser quite a few times, this is definitely in the roadmap.
+## Why
+
+There's enough reasons to sync your spotify library to a playlist, this could go from sharing the playlist to keeping the library small and clean while still having a playlist as an archive.
+
+## Usage
+
+This is a very developer centric tool and would need a few steps to get it to up and ready.
+
+1. Get the `CLIENT ID` and `CLIENT SECRET` from a [developer.spotify.com](https://developer.spotify.com) account
+2. Set a redirection url on the developer portal and make sure you remember the port you used. (eg: `localhost:8080`)
+3. Create a file `musync.yml` in `~/.config/musync/`
+
+```sh
+touch ~/.config/musync/musync.yml
+```
+
+4. copy the template from `config.template.yml` in this repo and paste it in `~/.config/musync/musync.yml`
+
+5. Fill in the values there
+
+```yml
+client_id: "CLIENT_ID"
+client_secret: "CLIENT_SECRET"
+
+# the id of the playlist to sync the library to, you can get this from the https://open.spotify.com url when you have the playlist open
+playlist: ""
+
+# the port you set on the developer.spotify.com website when creating a new app
+port: 8080
+```
+
+6. Once done with everything above, you can just run `musync` from anywhere and it should guide you through a authentication process or just start syncing process
+
+```sh
+musync
+```
+
+## LICENSE
+
+[MIT](LICENSE)
