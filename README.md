@@ -13,7 +13,7 @@ Simple utility to sync your spotify library with a playlist.
 ## Features
 
 - Sync Queues
-- Batched Processing (less heavy on the RAM)
+- Concurrent Batch Processing
 
 ## Why
 

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/zmb3/spotify"
 )
@@ -142,6 +143,8 @@ func getClientFromRequest(w http.ResponseWriter, r *http.Request) spotify.Client
 }
 
 func handleTrackShift(client spotify.Client) {
+	var syncBatchWG sync.WaitGroup
+
 	playlistId := globalConfig.PlaylistTarget
 	user, err := client.CurrentUser()
 
@@ -159,10 +162,10 @@ func handleTrackShift(client spotify.Client) {
 
 	bail(err)
 
-	totalCount := tracks.Total
 	fmt.Println(prompt+
-		"Total Tracks in Library:", colorString(terminalGreen, fmt.Sprint(totalCount)),
+		"Total Tracks in Library:", colorString(terminalGreen, fmt.Sprint(tracks.Total)),
 	)
+
 	playlist, err := client.GetPlaylist(spotify.ID(playlistId))
 	if err != nil {
 		log.Fatal("Failed while trying to get playlist, Error:", err)
@@ -201,11 +204,18 @@ func handleTrackShift(client spotify.Client) {
 	batches := getPlaylistIDChunks(uniqueTrackIds, 100)
 
 	for _, batch := range batches {
-		_, err = client.AddTracksToPlaylist(spotify.ID(playlistId), batch...)
-		if err != nil {
-			log.Fatal("Failed to sync library with playlist,Error:", err)
-		}
+		syncBatchWG.Add(1)
+		batch := batch
+		go func() {
+			defer syncBatchWG.Done()
+			_, err = client.AddTracksToPlaylist(spotify.ID(playlistId), batch...)
+			if err != nil {
+				log.Fatal("Failed to sync library with playlist,Error:", err)
+			}
+		}()
 	}
+
+	syncBatchWG.Wait()
 
 	fmt.Println(colorString(terminalGreen, "\n    Done!"))
 }
