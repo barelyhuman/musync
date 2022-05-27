@@ -2,10 +2,10 @@ package account
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 
+	"github.com/barelyhuman/musync/utils"
 	"github.com/twinj/uuid"
 	"github.com/zmb3/spotify"
 	"golang.org/x/oauth2"
@@ -22,12 +22,10 @@ type Auth struct {
 	RedirectURL   string
 	Token         *oauth2.Token
 	Storage       *TokenStorage
+	writer        *utils.Writer
 }
 
-type AuthConfig struct {
-	RedirectURL string
-	token       *oauth2.Token
-}
+type AuthOption func(*Auth)
 
 type PersistDetails struct {
 	RedirectURL string
@@ -55,7 +53,7 @@ func (auth *Auth) StartVerificationServer(port string, onComplete chan bool) {
 	serverListener = make(chan bool)
 	server := &http.Server{Addr: ":" + port}
 
-	fmt.Println("Starting verification server:", port)
+	auth.writer.Info("Started verification server on: " + port)
 
 	http.HandleFunc("/callback", func(rw http.ResponseWriter, r *http.Request) {
 		auth.getClientFromRequest(rw, r)
@@ -103,23 +101,28 @@ func (auth *Auth) GetAuthURL(clientId string, secretKey string) string {
 	return auth.authenticator.AuthURLWithDialog(state)
 }
 
-func NewAuth(params AuthConfig) *Auth {
+func NewAuth(options ...AuthOption) *Auth {
 	auth := &Auth{}
-	redirectURL := params.RedirectURL
-	auth.authenticator = spotify.NewAuthenticator(redirectURL, spotify.ScopeUserReadPrivate, spotify.ScopeUserLibraryRead, spotify.ScopePlaylistModifyPublic)
 	auth.Storage = NewTokenStorage()
-	if params.token != nil && len(params.token.AccessToken) > 0 {
-		auth.Client = auth.authenticator.NewClient(params.token)
+	auth.writer = utils.NewWriter()
+
+	for _, opt := range options {
+		opt(auth)
 	}
 	return auth
 }
 
-func AuthFromToken() *Auth {
-	auth := &Auth{}
-	var persist PersistDetails
-	auth.Storage = NewTokenStorage()
-	auth.Storage.ReadToken(&persist)
-	auth.authenticator = spotify.NewAuthenticator(persist.RedirectURL, spotify.ScopeUserReadPrivate, spotify.ScopeUserLibraryRead, spotify.ScopePlaylistModifyPublic)
-	auth.Client = auth.authenticator.NewClient(persist.Token)
-	return auth
+func WithoutToken(redirectURL string) AuthOption {
+	return func(auth *Auth) {
+		auth.authenticator = spotify.NewAuthenticator(redirectURL, spotify.ScopeUserReadPrivate, spotify.ScopeUserLibraryRead, spotify.ScopePlaylistModifyPublic)
+	}
+}
+
+func WithToken() AuthOption {
+	return func(auth *Auth) {
+		var persist PersistDetails
+		auth.Storage.ReadToken(&persist)
+		auth.authenticator = spotify.NewAuthenticator(persist.RedirectURL, spotify.ScopeUserReadPrivate, spotify.ScopeUserLibraryRead, spotify.ScopePlaylistModifyPublic)
+		auth.Client = auth.authenticator.NewClient(persist.Token)
+	}
 }

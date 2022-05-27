@@ -79,6 +79,12 @@ func main() {
 						Usage:    "Destination playlists, playlist to transfer everything into",
 						Required: true,
 					},
+					&cli.BoolFlag{
+						Name:    "quiet",
+						Aliases: []string{"q"},
+						Value:   false,
+						Usage:   "Will print nothing to stdout other than errors",
+					},
 				},
 				Usage: "start a sync task between playlists / library",
 				Action: func(c *cli.Context) error {
