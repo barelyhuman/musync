@@ -3,6 +3,7 @@ package sync
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 
 	"github.com/barelyhuman/musync/account"
@@ -14,9 +15,10 @@ type Syncer struct {
 	source        string
 	destination   string
 	authenticator *account.Auth
+	writer        *utils.Writer
 }
 
-type Options func(*Syncer)
+type SyncerOptions func(*Syncer)
 
 func (s *Syncer) getAllTrackIds(tracks *spotify.SavedTrackPage) (result []string) {
 	for page := 1; ; page++ {
@@ -58,9 +60,11 @@ func (s *Syncer) Sync() error {
 		return fmt.Errorf("failed to get user...\n Error: %v", err)
 	}
 
-	fmt.Println("Logged in as:", user.DisplayName)
+	s.writer.Info("Logged in as: " + user.DisplayName)
 
 	var sourceTrackIds []string
+
+	s.writer.Info("Please wait, while we check the source and destination playlists")
 
 	if s.source == "lib" {
 		tracks, err := s.authenticator.Client.CurrentUsersTracks()
@@ -69,26 +73,26 @@ func (s *Syncer) Sync() error {
 		}
 
 		sourceTrackIds = s.getAllTrackIds(tracks)
-		fmt.Println("Processing User Library...")
+		s.writer.Info("Processing User Library...")
 
-		fmt.Println("Total Tracks in Library:", tracks.Total)
+		s.writer.Info("Total Tracks in Library: " + strconv.Itoa(tracks.Total))
 	} else {
 		sourcePlaylist, err := s.authenticator.Client.GetPlaylist(spotify.ID(s.source))
 		if err != nil {
 			return err
 		}
-		fmt.Println("Processing Source Playlist:", sourcePlaylist.Name)
+		s.writer.Info("Processing Source Playlist: " + sourcePlaylist.Name)
 		sourceTrackIds = s.getAllPlaylistIds(sourcePlaylist)
 	}
 
 	targetPlaylist, err := s.authenticator.Client.GetPlaylist(spotify.ID(targetPlaylistID))
 	if err != nil {
-		log.Fatal("Failed while trying to get playlist, Error:", err)
+		log.Fatal("Failed while trying to get playlist, Error: ", err)
 	}
 
-	fmt.Println("Comparing Library and Playlist:", targetPlaylist.Name)
+	s.writer.Info("Comparing Library and Playlist: " + targetPlaylist.Name)
 
-	fmt.Println("Please wait...")
+	s.writer.Info("Please wait...")
 
 	trackIdsInDestinationPlaylist := s.getAllPlaylistIds(targetPlaylist)
 
@@ -100,10 +104,10 @@ func (s *Syncer) Sync() error {
 		}
 	}
 
-	fmt.Printf("Total Tracks to be Moved: %d\n", len(uniqueTrackIds))
+	s.writer.Info("Total Tracks to be Moved: " + strconv.Itoa(len(uniqueTrackIds)))
 
 	if len(uniqueTrackIds) < 1 {
-		fmt.Println("Playlists already synced")
+		s.writer.Info("Playlists already synced")
 	}
 
 	batches := utils.Chunk(uniqueTrackIds, 100)
@@ -122,12 +126,12 @@ func (s *Syncer) Sync() error {
 
 	syncBatchWG.Wait()
 
-	fmt.Println("Synced!")
+	s.writer.Success("Synced!")
 
 	return nil
 }
 
-func NewSyncer(source, destination string, opts ...Options) *Syncer {
+func NewSyncer(source, destination string, opts ...SyncerOptions) *Syncer {
 	syncer := &Syncer{}
 
 	syncer.source = source
@@ -140,8 +144,14 @@ func NewSyncer(source, destination string, opts ...Options) *Syncer {
 	return syncer
 }
 
-func WithAuthenticator(auth *account.Auth) Options {
+func WithAuthenticator(auth *account.Auth) SyncerOptions {
 	return func(s *Syncer) {
 		s.authenticator = auth
+	}
+}
+
+func WithWriter(writer *utils.Writer) SyncerOptions {
+	return func(s *Syncer) {
+		s.writer = writer
 	}
 }
