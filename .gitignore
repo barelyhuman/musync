@@ -28,3 +28,5 @@
 musync.yaml
 token.yml
 .DS_Store
+musync
+main.go.bak
