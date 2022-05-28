@@ -6,8 +6,8 @@ on:
       - "v*-dev.*"
 
 jobs:
-  pre-release:
-    name: Pre Release
+  release:
+    name: Release
     runs-on: ubuntu-latest
     steps:
       - name: Get current date
